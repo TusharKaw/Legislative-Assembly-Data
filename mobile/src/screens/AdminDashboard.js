@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { View, StyleSheet, FlatList, Alert, RefreshControl } from 'react-native';
+import { View, StyleSheet, FlatList, Alert, RefreshControl, Platform } from 'react-native';
 import {
   Card,
   Title,
@@ -10,7 +10,9 @@ import {
   Dialog,
   Portal,
   Appbar,
+  Avatar,
 } from 'react-native-paper';
+import * as ImagePicker from 'expo-image-picker';
 import { AuthContext } from '../../App';
 import api from '../config/api';
 
@@ -28,6 +30,10 @@ export default function AdminDashboard({ navigation }) {
     sessionDate: '',
     speechGiven: '',
     timeTaken: '',
+    partyName: '',
+    partyLogo: '',
+    image: null,
+    imageUri: '',
   });
 
   useEffect(() => {
@@ -57,8 +63,46 @@ export default function AdminDashboard({ navigation }) {
       sessionDate: '',
       speechGiven: '',
       timeTaken: '',
+      partyName: '',
+      partyLogo: '',
+      image: null,
+      imageUri: '',
     });
     setEditingMember(null);
+  };
+
+  const pickImage = async (type) => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Please grant camera roll permissions');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: type === 'logo' ? [1, 1] : [3, 4],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        if (type === 'image') {
+          setFormData({
+            ...formData,
+            image: result.assets[0],
+            imageUri: result.assets[0].uri,
+          });
+        } else if (type === 'logo') {
+          setFormData({
+            ...formData,
+            partyLogo: result.assets[0].uri,
+          });
+        }
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to pick image');
+    }
   };
 
   const openDialog = (member = null) => {
@@ -71,6 +115,10 @@ export default function AdminDashboard({ navigation }) {
         sessionDate: new Date(member.sessionDate).toISOString().split('T')[0],
         speechGiven: member.speechGiven,
         timeTaken: member.timeTaken.toString(),
+        partyName: member.partyName || '',
+        partyLogo: member.partyLogoUrl || '',
+        image: null,
+        imageUri: member.imageUrl || '',
       });
     } else {
       resetForm();
@@ -86,16 +134,41 @@ export default function AdminDashboard({ navigation }) {
   const handleSave = async () => {
     if (!formData.name || !formData.constituency || !formData.sessionName || 
         !formData.sessionDate || !formData.speechGiven || !formData.timeTaken) {
-      Alert.alert('Error', 'Please fill all fields');
+      Alert.alert('Error', 'Please fill all required fields');
       return;
     }
 
     try {
+      const submitData = new FormData();
+      submitData.append('name', formData.name);
+      submitData.append('constituency', formData.constituency);
+      submitData.append('sessionName', formData.sessionName);
+      submitData.append('sessionDate', formData.sessionDate);
+      submitData.append('speechGiven', formData.speechGiven);
+      submitData.append('timeTaken', formData.timeTaken);
+      submitData.append('partyName', formData.partyName || '');
+      
+      if (formData.image && formData.imageUri) {
+        submitData.append('image', {
+          uri: formData.imageUri,
+          type: 'image/jpeg',
+          name: 'member-image.jpg',
+        });
+      }
+      
+      if (formData.partyLogo) {
+        submitData.append('partyLogo', {
+          uri: formData.partyLogo,
+          type: 'image/png',
+          name: 'party-logo.png',
+        });
+      }
+
       if (editingMember) {
-        await api.put(`/members/${editingMember._id}`, formData);
+        await api.put(`/members/${editingMember._id}`, submitData);
         Alert.alert('Success', 'Member updated successfully');
       } else {
-        await api.post('/members', formData);
+        await api.post('/members', submitData);
         Alert.alert('Success', 'Member added successfully');
       }
       closeDialog();
@@ -138,7 +211,7 @@ export default function AdminDashboard({ navigation }) {
           text: 'Logout',
           onPress: async () => {
             await logout();
-            navigation.replace('Home');
+            navigation.navigate('Home');
           },
         },
       ]
@@ -175,6 +248,12 @@ export default function AdminDashboard({ navigation }) {
   return (
     <View style={styles.container}>
       <Appbar.Header>
+        <Appbar.Action 
+          icon="arrow-left" 
+          onPress={() => {
+            navigation.navigate('Home');
+          }} 
+        />
         <Appbar.Content title="Admin Dashboard" />
         <Appbar.Action icon="logout" onPress={handleLogout} />
       </Appbar.Header>
@@ -255,6 +334,43 @@ export default function AdminDashboard({ navigation }) {
               keyboardType="numeric"
               style={styles.input}
             />
+            <TextInput
+              label="Party Name"
+              value={formData.partyName}
+              onChangeText={(text) => setFormData({ ...formData, partyName: text })}
+              mode="outlined"
+              style={styles.input}
+            />
+            <View style={styles.imageSection}>
+              <Title style={styles.sectionTitle}>Member Photo</Title>
+              {formData.imageUri ? (
+                <View style={styles.imagePreview}>
+                  <Avatar.Image size={100} source={{ uri: formData.imageUri }} />
+                  <Button onPress={() => pickImage('image')} mode="outlined" style={styles.imageButton}>
+                    Change Photo
+                  </Button>
+                </View>
+              ) : (
+                <Button onPress={() => pickImage('image')} mode="outlined" icon="camera" style={styles.imageButton}>
+                  Upload Photo
+                </Button>
+              )}
+            </View>
+            <View style={styles.imageSection}>
+              <Title style={styles.sectionTitle}>Party Logo</Title>
+              {formData.partyLogo ? (
+                <View style={styles.imagePreview}>
+                  <Avatar.Image size={60} source={{ uri: formData.partyLogo }} />
+                  <Button onPress={() => pickImage('logo')} mode="outlined" style={styles.imageButton}>
+                    Change Logo
+                  </Button>
+                </View>
+              ) : (
+                <Button onPress={() => pickImage('logo')} mode="outlined" icon="image" style={styles.imageButton}>
+                  Upload Party Logo
+                </Button>
+              )}
+            </View>
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={closeDialog}>Cancel</Button>
@@ -308,6 +424,21 @@ const styles = StyleSheet.create({
   emptyText: {
     textAlign: 'center',
     color: '#666',
+  },
+  imageSection: {
+    marginTop: 15,
+    marginBottom: 10,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    marginBottom: 10,
+  },
+  imagePreview: {
+    alignItems: 'center',
+    marginVertical: 10,
+  },
+  imageButton: {
+    marginTop: 10,
   },
 });
 

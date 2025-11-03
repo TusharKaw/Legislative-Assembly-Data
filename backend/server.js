@@ -36,6 +36,10 @@ const corsOptions = {
 // Apply CORS to all routes
 app.use(cors(corsOptions));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Serve uploaded files
+app.use('/uploads', express.static('uploads'));
 
 // Handle preflight requests explicitly
 app.options('*', (req, res) => {

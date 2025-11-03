@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
-import { Card, Title, Paragraph, Button, Chip, Appbar, Menu } from 'react-native-paper';
+import React, { useState, useEffect, useContext } from 'react';
+import { View, StyleSheet, FlatList, RefreshControl, TouchableOpacity, ScrollView } from 'react-native';
+import { Card, Title, Paragraph, Button, Chip, Appbar, Menu, Portal, Dialog, IconButton, Avatar } from 'react-native-paper';
+import { AuthContext } from '../../App';
 import api from '../config/api';
 
 export default function HomeScreen({ navigation }) {
+  const { isAuthenticated } = useContext(AuthContext);
   const [members, setMembers] = useState([]);
   const [filteredMembers, setFilteredMembers] = useState([]);
   const [sessionNames, setSessionNames] = useState([]);
@@ -13,6 +15,9 @@ export default function HomeScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [sessionNameMenuVisible, setSessionNameMenuVisible] = useState(false);
   const [sessionDateMenuVisible, setSessionDateMenuVisible] = useState(false);
+  const [speechDialogVisible, setSpeechDialogVisible] = useState(false);
+  const [selectedSpeech, setSelectedSpeech] = useState(null);
+  const [hamburgerMenuVisible, setHamburgerMenuVisible] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -65,37 +70,99 @@ export default function HomeScreen({ navigation }) {
     setSelectedSessionDate('');
   };
 
-  const renderMemberCard = ({ item }) => (
-    <TouchableOpacity
-      onPress={() => navigation.navigate('MemberDetails', { member: item })}
-    >
-      <Card style={styles.card}>
-        <Card.Content>
-          <Title>{item.name}</Title>
-          <Paragraph>Constituency: {item.constituency}</Paragraph>
-          <Paragraph>Session: {item.sessionName}</Paragraph>
-          <Paragraph>Date: {new Date(item.sessionDate).toLocaleDateString()}</Paragraph>
-          <View style={styles.row}>
-            <Chip icon="clock-outline" style={styles.chip}>
-              {item.timeTaken} min
-            </Chip>
-          </View>
-          <Paragraph numberOfLines={2} style={styles.speech}>
+  const showSpeech = (member) => {
+    setSelectedSpeech(member);
+    setSpeechDialogVisible(true);
+  };
+
+  const renderMemberCard = ({ item }) => {
+    const imageUrl = item.imageUrl 
+      ? (item.imageUrl.startsWith('http') ? item.imageUrl : `http://127.0.0.1:5000${item.imageUrl}`)
+      : null;
+    const logoUrl = item.partyLogoUrl 
+      ? (item.partyLogoUrl.startsWith('http') ? item.partyLogoUrl : `http://127.0.0.1:5000${item.partyLogoUrl}`)
+      : null;
+    
+    return (
+    <Card style={styles.card}>
+      <Card.Content>
+        {imageUrl && (
+          <Card.Cover source={{ uri: imageUrl }} style={styles.memberImage} />
+        )}
+        <View style={styles.nameRow}>
+          <Title style={styles.memberName}>{item.name}</Title>
+          {logoUrl && (
+            <Avatar.Image size={40} source={{ uri: logoUrl }} />
+          )}
+        </View>
+        {item.partyName && (
+          <Paragraph style={styles.partyName}>Party: {item.partyName}</Paragraph>
+        )}
+        <Paragraph>Constituency: {item.constituency}</Paragraph>
+        <Paragraph>Session: {item.sessionName}</Paragraph>
+        <Paragraph>Date: {new Date(item.sessionDate).toLocaleDateString()}</Paragraph>
+        <View style={styles.row}>
+          <Chip icon="clock-outline" style={styles.chip}>
+            {item.timeTaken} min
+          </Chip>
+        </View>
+        <View style={styles.speechContainer}>
+          <Paragraph numberOfLines={3} style={styles.speechPreview}>
             {item.speechGiven}
           </Paragraph>
-        </Card.Content>
-      </Card>
-    </TouchableOpacity>
-  );
+          <Button
+            mode="text"
+            icon="text-box-outline"
+            onPress={() => showSpeech(item)}
+            style={styles.showSpeechButton}
+          >
+            Show Speech
+          </Button>
+        </View>
+        <TouchableOpacity onPress={() => navigation.navigate('MemberDetails', { member: item })}>
+          <Button mode="outlined" style={styles.viewDetailsButton}>
+            View Details
+          </Button>
+        </TouchableOpacity>
+      </Card.Content>
+    </Card>
+    );
+  };
 
   return (
     <View style={styles.container}>
       <Appbar.Header>
+        <Menu
+          visible={hamburgerMenuVisible}
+          onDismiss={() => setHamburgerMenuVisible(false)}
+          anchor={
+            <Appbar.Action 
+              icon="menu" 
+              onPress={() => setHamburgerMenuVisible(true)}
+            />
+          }
+        >
+          {isAuthenticated ? (
+            <Menu.Item
+              onPress={() => {
+                setHamburgerMenuVisible(false);
+                navigation.navigate('AdminDashboard');
+              }}
+              title="Admin Dashboard"
+              leadingIcon="shield-account"
+            />
+          ) : (
+            <Menu.Item
+              onPress={() => {
+                setHamburgerMenuVisible(false);
+                navigation.navigate('Login');
+              }}
+              title="Admin Login"
+              leadingIcon="login"
+            />
+          )}
+        </Menu>
         <Appbar.Content title="Delhi Legislative Council" />
-        <Appbar.Action 
-          icon="login" 
-          onPress={() => navigation.navigate('Login')} 
-        />
       </Appbar.Header>
 
       <View style={styles.filterContainer}>
@@ -189,6 +256,35 @@ export default function HomeScreen({ navigation }) {
           </Card>
         }
       />
+
+      <Portal>
+        <Dialog 
+          visible={speechDialogVisible} 
+          onDismiss={() => setSpeechDialogVisible(false)}
+          style={styles.speechDialog}
+        >
+          <Dialog.Title>
+            {selectedSpeech?.name} - Speech
+          </Dialog.Title>
+          <Dialog.ScrollArea style={styles.speechScrollArea}>
+            <ScrollView>
+              <Dialog.Content>
+                <View style={styles.speechHeader}>
+                  <Chip icon="clock-outline" style={styles.speechChip}>
+                    Time Taken: {selectedSpeech?.timeTaken} minutes
+                  </Chip>
+                </View>
+                <Paragraph style={styles.speechText}>
+                  {selectedSpeech?.speechGiven}
+                </Paragraph>
+              </Dialog.Content>
+            </ScrollView>
+          </Dialog.ScrollArea>
+          <Dialog.Actions>
+            <Button onPress={() => setSpeechDialogVisible(false)}>Close</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </View>
   );
 }
@@ -230,9 +326,57 @@ const styles = StyleSheet.create({
   chip: {
     marginRight: 10,
   },
-  speech: {
-    marginTop: 5,
+  speechContainer: {
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  speechPreview: {
+    marginBottom: 8,
     fontStyle: 'italic',
+    color: '#666',
+  },
+  showSpeechButton: {
+    alignSelf: 'flex-start',
+  },
+  viewDetailsButton: {
+    marginTop: 10,
+  },
+  memberImage: {
+    marginBottom: 10,
+    height: 150,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 5,
+  },
+  memberName: {
+    flex: 1,
+    marginRight: 10,
+  },
+  partyName: {
+    fontWeight: 'bold',
+    color: '#1976d2',
+    marginBottom: 5,
+  },
+  speechDialog: {
+    maxHeight: '80%',
+  },
+  speechScrollArea: {
+    maxHeight: 400,
+    paddingHorizontal: 0,
+  },
+  speechHeader: {
+    marginBottom: 15,
+  },
+  speechChip: {
+    alignSelf: 'flex-start',
+  },
+  speechText: {
+    fontSize: 16,
+    lineHeight: 24,
+    textAlign: 'justify',
   },
   emptyCard: {
     marginTop: 50,

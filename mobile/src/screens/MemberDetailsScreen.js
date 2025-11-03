@@ -1,15 +1,37 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
-import { Card, Title, Paragraph, Chip } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, Image } from 'react-native';
+import { Card, Title, Paragraph, Chip, Avatar } from 'react-native-paper';
 
 export default function MemberDetailsScreen({ route }) {
   const { member } = route.params;
+
+  const imageUrl = member.imageUrl 
+    ? (member.imageUrl.startsWith('http') ? member.imageUrl : `http://127.0.0.1:5000${member.imageUrl}`)
+    : null;
+  const logoUrl = member.partyLogoUrl 
+    ? (member.partyLogoUrl.startsWith('http') ? member.partyLogoUrl : `http://127.0.0.1:5000${member.partyLogoUrl}`)
+    : null;
 
   return (
     <ScrollView style={styles.container}>
       <Card style={styles.card}>
         <Card.Content>
-          <Title style={styles.title}>{member.name}</Title>
+          {imageUrl && (
+            <Card.Cover source={{ uri: imageUrl }} style={styles.memberImage} />
+          )}
+          <View style={styles.headerRow}>
+            <Title style={styles.title}>{member.name}</Title>
+            {logoUrl && (
+              <Avatar.Image size={50} source={{ uri: logoUrl }} />
+            )}
+          </View>
+          
+          {member.partyName && (
+            <View style={styles.section}>
+              <Paragraph style={styles.label}>Party:</Paragraph>
+              <Paragraph style={styles.value}>{member.partyName}</Paragraph>
+            </View>
+          )}
           
           <View style={styles.section}>
             <Paragraph style={styles.label}>Constituency:</Paragraph>
@@ -61,7 +83,17 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     marginBottom: 20,
-    textAlign: 'center',
+    flex: 1,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  memberImage: {
+    marginBottom: 15,
+    height: 250,
   },
   section: {
     marginBottom: 15,

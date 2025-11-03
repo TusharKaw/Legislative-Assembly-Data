@@ -20,7 +20,7 @@ export default function LoginScreen({ navigation }) {
     try {
       const response = await api.post('/admin/login', { email, password });
       await login(response.data.token);
-      navigation.replace('AdminDashboard');
+      navigation.navigate('AdminDashboard');
     } catch (error) {
       Alert.alert('Error', error.response?.data?.message || 'Login failed');
     } finally {

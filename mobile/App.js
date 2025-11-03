@@ -52,31 +52,26 @@ export default function App() {
       <PaperProvider theme={theme}>
         <NavigationContainer>
           <Stack.Navigator>
-            {isAuthenticated ? (
-              <Stack.Screen 
-                name="AdminDashboard" 
-                component={AdminDashboard}
-                options={{ title: 'Admin Dashboard' }}
-              />
-            ) : (
-              <>
-                <Stack.Screen 
-                  name="Home" 
-                  component={HomeScreen}
-                  options={{ title: 'Delhi Legislative Council' }}
-                />
-                <Stack.Screen 
-                  name="MemberDetails" 
-                  component={MemberDetailsScreen}
-                  options={{ title: 'Member Details' }}
-                />
-                <Stack.Screen 
-                  name="Login" 
-                  component={LoginScreen}
-                  options={{ title: 'Admin Login' }}
-                />
-              </>
-            )}
+            <Stack.Screen 
+              name="Home" 
+              component={HomeScreen}
+              options={{ title: 'Delhi Legislative Council' }}
+            />
+            <Stack.Screen 
+              name="MemberDetails" 
+              component={MemberDetailsScreen}
+              options={{ title: 'Member Details' }}
+            />
+            <Stack.Screen 
+              name="Login" 
+              component={LoginScreen}
+              options={{ title: 'Admin Login' }}
+            />
+            <Stack.Screen 
+              name="AdminDashboard" 
+              component={AdminDashboard}
+              options={{ title: 'Admin Dashboard' }}
+            />
           </Stack.Navigator>
         </NavigationContainer>
       </PaperProvider>

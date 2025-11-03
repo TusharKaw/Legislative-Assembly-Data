@@ -28,6 +28,19 @@ const memberSchema = new mongoose.Schema({
     type: Number,
     required: true,
     min: 0
+  },
+  partyName: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  imageUrl: {
+    type: String,
+    default: ''
+  },
+  partyLogoUrl: {
+    type: String,
+    default: ''
   }
 }, {
   timestamps: true

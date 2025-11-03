@@ -1,7 +1,30 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const Member = require('../models/Member');
 const auth = require('../middleware/auth');
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = 'uploads/';
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+});
 
 // GET /api/members - Get all members (with optional filters)
 router.get('/', async (req, res) => {
@@ -70,23 +93,38 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/members - Add new member (Admin only)
-router.post('/', auth, async (req, res) => {
+router.post('/', auth, upload.fields([
+  { name: 'image', maxCount: 1 },
+  { name: 'partyLogo', maxCount: 1 }
+]), async (req, res) => {
   try {
-    const { name, constituency, sessionName, sessionDate, speechGiven, timeTaken } = req.body;
+    const { name, constituency, sessionName, sessionDate, speechGiven, timeTaken, partyName } = req.body;
 
     if (!name || !constituency || !sessionName || !sessionDate || !speechGiven || timeTaken === undefined) {
       return res.status(400).json({ message: 'Please provide all required fields' });
     }
 
-    const member = new Member({
+    const memberData = {
       name,
       constituency,
       sessionName,
       sessionDate: new Date(sessionDate),
       speechGiven,
-      timeTaken: Number(timeTaken)
-    });
+      timeTaken: Number(timeTaken),
+      partyName: partyName || ''
+    };
 
+    // Handle image upload
+    if (req.files && req.files.image) {
+      memberData.imageUrl = `/uploads/${req.files.image[0].filename}`;
+    }
+
+    // Handle party logo upload
+    if (req.files && req.files.partyLogo) {
+      memberData.partyLogoUrl = `/uploads/${req.files.partyLogo[0].filename}`;
+    }
+
+    const member = new Member(memberData);
     await member.save();
     res.status(201).json(member);
   } catch (error) {
@@ -96,9 +134,12 @@ router.post('/', auth, async (req, res) => {
 });
 
 // PUT /api/members/:id - Update member (Admin only)
-router.put('/:id', auth, async (req, res) => {
+router.put('/:id', auth, upload.fields([
+  { name: 'image', maxCount: 1 },
+  { name: 'partyLogo', maxCount: 1 }
+]), async (req, res) => {
   try {
-    const { name, constituency, sessionName, sessionDate, speechGiven, timeTaken } = req.body;
+    const { name, constituency, sessionName, sessionDate, speechGiven, timeTaken, partyName } = req.body;
 
     const updateData = {};
     if (name) updateData.name = name;
@@ -107,6 +148,17 @@ router.put('/:id', auth, async (req, res) => {
     if (sessionDate) updateData.sessionDate = new Date(sessionDate);
     if (speechGiven) updateData.speechGiven = speechGiven;
     if (timeTaken !== undefined) updateData.timeTaken = Number(timeTaken);
+    if (partyName !== undefined) updateData.partyName = partyName;
+
+    // Handle image upload
+    if (req.files && req.files.image) {
+      updateData.imageUrl = `/uploads/${req.files.image[0].filename}`;
+    }
+
+    // Handle party logo upload
+    if (req.files && req.files.partyLogo) {
+      updateData.partyLogoUrl = `/uploads/${req.files.partyLogo[0].filename}`;
+    }
 
     const member = await Member.findByIdAndUpdate(
       req.params.id,
