@@ -1,0 +1,10 @@
+/* Hide extra navbar CSS class from React Native Web */
+.css-view-175oi2r {
+    display: none !important;
+}
+
+/* Additional cleanup for any other React Native Web generated classes */
+.css-view-175oi2r[data-testid] {
+    display: none !important;
+}
+

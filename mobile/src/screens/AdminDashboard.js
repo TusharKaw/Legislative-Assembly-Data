@@ -48,6 +48,9 @@ export default function AdminDashboard({ navigation, route }) {
     image: null,
     imageUri: '',
   });
+  
+  // Validation errors
+  const [validationErrors, setValidationErrors] = useState({});
 
   useEffect(() => {
     loadMembers();
@@ -82,6 +85,7 @@ export default function AdminDashboard({ navigation, route }) {
       image: null,
       imageUri: '',
     });
+    setValidationErrors({});
     setEditingMember(null);
   };
 
@@ -151,7 +155,73 @@ export default function AdminDashboard({ navigation, route }) {
     resetForm();
   };
 
+  // Validation functions
+  const validateName = (text) => {
+    // Only allow letters, spaces, hyphens, and apostrophes
+    return /^[A-Za-z\s\-']+$/.test(text);
+  };
+
+  const validateDate = (text) => {
+    // Only allow numbers and date separators (YYYY-MM-DD format)
+    return /^[0-9\-]+$/.test(text) && text.length <= 10;
+  };
+
+  const validateTime = (text) => {
+    // Only allow numbers
+    return /^[0-9]+$/.test(text);
+  };
+
+  const validateInput = (field, value) => {
+    const errors = { ...validationErrors };
+    
+    if (field === 'name' || field === 'constituency' || field === 'sessionName' || field === 'partyName') {
+      if (value && !validateName(value)) {
+        errors[field] = 'Only letters, spaces, hyphens, and apostrophes are allowed';
+      } else {
+        delete errors[field];
+      }
+    } else if (field === 'sessionDate') {
+      if (value && !validateDate(value)) {
+        errors[field] = 'Invalid date format. Use YYYY-MM-DD (numbers and hyphens only)';
+      } else {
+        delete errors[field];
+      }
+    } else if (field === 'timeTaken') {
+      if (value && !validateTime(value)) {
+        errors[field] = 'Only numbers are allowed';
+      } else {
+        delete errors[field];
+      }
+    }
+    
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleSave = async () => {
+    // Validate all fields
+    const nameFields = ['name', 'constituency', 'sessionName', 'partyName'];
+    const hasNameErrors = nameFields.some(field => 
+      formData[field] && !validateName(formData[field])
+    );
+    
+    if (formData.sessionDate && !validateDate(formData.sessionDate)) {
+      validateInput('sessionDate', formData.sessionDate);
+      Alert.alert('Validation Error', 'Please fix the validation errors');
+      return;
+    }
+    
+    if (formData.timeTaken && !validateTime(formData.timeTaken)) {
+      validateInput('timeTaken', formData.timeTaken);
+      Alert.alert('Validation Error', 'Please fix the validation errors');
+      return;
+    }
+    
+    if (hasNameErrors) {
+      Alert.alert('Validation Error', 'Name fields can only contain letters, spaces, hyphens, and apostrophes');
+      return;
+    }
+
     if (!formData.name || !formData.constituency || !formData.sessionName || 
         !formData.sessionDate || !formData.speechGiven || !formData.timeTaken) {
       Alert.alert('Error', 'Please fill all required fields');
@@ -240,7 +310,7 @@ export default function AdminDashboard({ navigation, route }) {
     }
   };
 
-  const handleDelete = (member) => {
+  const handleDelete = async (member) => {
     Alert.alert(
       'Confirm Delete',
       `Are you sure you want to delete ${member.name}?`,
@@ -251,11 +321,15 @@ export default function AdminDashboard({ navigation, route }) {
           style: 'destructive',
           onPress: async () => {
             try {
-              await api.delete(`/members/${member._id}`);
+              const response = await api.delete(`/members/${member._id}`);
               Alert.alert('Success', 'Member deleted successfully');
-              loadMembers();
+              await loadMembers();
             } catch (error) {
-              Alert.alert('Error', 'Failed to delete member');
+              console.error('Delete error:', error);
+              Alert.alert(
+                'Error', 
+                error.response?.data?.message || error.message || 'Failed to delete member. Please try again.'
+              );
             }
           },
         },
@@ -351,36 +425,64 @@ export default function AdminDashboard({ navigation, route }) {
           </Dialog.Title>
           <Dialog.Content>
             <TextInput
-              label="Name"
+              label="Name *"
               value={formData.name}
-              onChangeText={(text) => setFormData({ ...formData, name: text })}
+              onChangeText={(text) => {
+                // Filter out invalid characters in real-time
+                const filtered = text.replace(/[^A-Za-z\s\-']/g, '');
+                setFormData({ ...formData, name: filtered });
+                validateInput('name', filtered);
+              }}
               mode="outlined"
               style={styles.input}
+              error={!!validationErrors.name}
+              helperText={validationErrors.name}
             />
             <TextInput
-              label="Constituency"
+              label="Constituency *"
               value={formData.constituency}
-              onChangeText={(text) => setFormData({ ...formData, constituency: text })}
+              onChangeText={(text) => {
+                const filtered = text.replace(/[^A-Za-z\s\-']/g, '');
+                setFormData({ ...formData, constituency: filtered });
+                validateInput('constituency', filtered);
+              }}
               mode="outlined"
               style={styles.input}
+              error={!!validationErrors.constituency}
+              helperText={validationErrors.constituency}
             />
             <TextInput
-              label="Session Name"
+              label="Session Name *"
               value={formData.sessionName}
-              onChangeText={(text) => setFormData({ ...formData, sessionName: text })}
+              onChangeText={(text) => {
+                const filtered = text.replace(/[^A-Za-z\s\-']/g, '');
+                setFormData({ ...formData, sessionName: filtered });
+                validateInput('sessionName', filtered);
+              }}
               mode="outlined"
               style={styles.input}
+              error={!!validationErrors.sessionName}
+              helperText={validationErrors.sessionName}
             />
             <TextInput
-              label="Session Date (YYYY-MM-DD)"
+              label="Session Date (YYYY-MM-DD) *"
               value={formData.sessionDate}
-              onChangeText={(text) => setFormData({ ...formData, sessionDate: text })}
+              onChangeText={(text) => {
+                // Only allow numbers and hyphens
+                const filtered = text.replace(/[^0-9\-]/g, '');
+                // Limit to 10 characters (YYYY-MM-DD)
+                const limited = filtered.length > 10 ? filtered.slice(0, 10) : filtered;
+                setFormData({ ...formData, sessionDate: limited });
+                validateInput('sessionDate', limited);
+              }}
               mode="outlined"
               style={styles.input}
               placeholder="2024-01-15"
+              error={!!validationErrors.sessionDate}
+              helperText={validationErrors.sessionDate || 'Format: YYYY-MM-DD'}
             />
             <TextInput
-              label="Speech Given"
+              label="Speech Given *"
               value={formData.speechGiven}
               onChangeText={(text) => setFormData({ ...formData, speechGiven: text })}
               mode="outlined"
@@ -389,19 +491,32 @@ export default function AdminDashboard({ navigation, route }) {
               style={styles.input}
             />
             <TextInput
-              label="Time Taken (minutes)"
+              label="Time Taken (minutes) *"
               value={formData.timeTaken}
-              onChangeText={(text) => setFormData({ ...formData, timeTaken: text })}
+              onChangeText={(text) => {
+                // Only allow numbers
+                const filtered = text.replace(/[^0-9]/g, '');
+                setFormData({ ...formData, timeTaken: filtered });
+                validateInput('timeTaken', filtered);
+              }}
               mode="outlined"
               keyboardType="numeric"
               style={styles.input}
+              error={!!validationErrors.timeTaken}
+              helperText={validationErrors.timeTaken || 'Only numbers are allowed'}
             />
             <TextInput
               label="Party Name"
               value={formData.partyName}
-              onChangeText={(text) => setFormData({ ...formData, partyName: text })}
+              onChangeText={(text) => {
+                const filtered = text.replace(/[^A-Za-z\s\-']/g, '');
+                setFormData({ ...formData, partyName: filtered });
+                validateInput('partyName', filtered);
+              }}
               mode="outlined"
               style={styles.input}
+              error={!!validationErrors.partyName}
+              helperText={validationErrors.partyName}
             />
             <View style={styles.imageSection}>
               <Title style={styles.sectionTitle}>Member Photo</Title>

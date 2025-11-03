@@ -55,22 +55,22 @@ export default function App() {
             <Stack.Screen 
               name="Home" 
               component={HomeScreen}
-              options={{ title: 'Delhi Legislative Council' }}
+              options={{ headerShown: false }}
             />
             <Stack.Screen 
               name="MemberDetails" 
               component={MemberDetailsScreen}
-              options={{ title: 'Member Details' }}
+              options={{ headerShown: false }}
             />
             <Stack.Screen 
               name="Login" 
               component={LoginScreen}
-              options={{ title: 'Admin Login' }}
+              options={{ headerShown: false }}
             />
             <Stack.Screen 
               name="AdminDashboard" 
               component={AdminDashboard}
-              options={{ title: 'Admin Dashboard' }}
+              options={{ headerShown: false }}
             />
           </Stack.Navigator>
         </NavigationContainer>

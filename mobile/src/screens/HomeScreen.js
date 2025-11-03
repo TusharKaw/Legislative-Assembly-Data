@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import { View, StyleSheet, FlatList, RefreshControl, TouchableOpacity, ScrollView } from 'react-native';
-import { Card, Title, Paragraph, Button, Chip, Appbar, Menu, Portal, Dialog, IconButton, Avatar } from 'react-native-paper';
+import { Card, Title, Paragraph, Button, Chip, Appbar, Menu, Portal, Dialog, IconButton, Avatar, TextInput, Searchbar } from 'react-native-paper';
 import { AuthContext } from '../../App';
 import api from '../config/api';
 
@@ -18,14 +18,40 @@ export default function HomeScreen({ navigation }) {
   const [speechDialogVisible, setSpeechDialogVisible] = useState(false);
   const [selectedSpeech, setSelectedSpeech] = useState(null);
   const [hamburgerMenuVisible, setHamburgerMenuVisible] = useState(false);
+  
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+  const [searchCategory, setSearchCategory] = useState('all'); // all, name, partyName, constituency, sessionName, sessionDate
+  const [searchCategoryMenuVisible, setSearchCategoryMenuVisible] = useState(false);
+  
+  // Lazy loading with debounce
+  const searchTimeoutRef = useRef(null);
 
   useEffect(() => {
     loadData();
   }, []);
 
+  // Debounce search query for lazy loading
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    
+    searchTimeoutRef.current = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 500); // 500ms delay for lazy loading
+    
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchQuery]);
+
   useEffect(() => {
     applyFilters();
-  }, [members, selectedSessionName, selectedSessionDate]);
+  }, [members, selectedSessionName, selectedSessionDate, debouncedSearchQuery, searchCategory]);
 
   const loadData = async () => {
     try {
@@ -50,6 +76,7 @@ export default function HomeScreen({ navigation }) {
   const applyFilters = () => {
     let filtered = [...members];
 
+    // Apply dropdown filters (session name and date)
     if (selectedSessionName) {
       filtered = filtered.filter(m => m.sessionName === selectedSessionName);
     }
@@ -62,12 +89,43 @@ export default function HomeScreen({ navigation }) {
       });
     }
 
+    // Apply search query with selected category
+    if (debouncedSearchQuery.trim()) {
+      const query = debouncedSearchQuery.toLowerCase().trim();
+      filtered = filtered.filter(member => {
+        if (searchCategory === 'all') {
+          // Search across all fields
+          return (
+            member.name?.toLowerCase().includes(query) ||
+            member.partyName?.toLowerCase().includes(query) ||
+            member.constituency?.toLowerCase().includes(query) ||
+            member.sessionName?.toLowerCase().includes(query) ||
+            new Date(member.sessionDate).toLocaleDateString().toLowerCase().includes(query)
+          );
+        } else if (searchCategory === 'name') {
+          return member.name?.toLowerCase().includes(query);
+        } else if (searchCategory === 'partyName') {
+          return member.partyName?.toLowerCase().includes(query);
+        } else if (searchCategory === 'constituency') {
+          return member.constituency?.toLowerCase().includes(query);
+        } else if (searchCategory === 'sessionName') {
+          return member.sessionName?.toLowerCase().includes(query);
+        } else if (searchCategory === 'sessionDate') {
+          return new Date(member.sessionDate).toLocaleDateString().toLowerCase().includes(query);
+        }
+        return true;
+      });
+    }
+
     setFilteredMembers(filtered);
   };
 
   const clearFilters = () => {
     setSelectedSessionName('');
     setSelectedSessionDate('');
+    setSearchQuery('');
+    setDebouncedSearchQuery('');
+    setSearchCategory('all');
   };
 
   const showSpeech = (member) => {
@@ -181,6 +239,92 @@ export default function HomeScreen({ navigation }) {
       </Appbar.Header>
 
       <View style={styles.filterContainer}>
+        {/* Search Bar */}
+        <View style={styles.searchContainer}>
+          <View style={styles.searchBarRow}>
+            <Searchbar
+              placeholder="Search members..."
+              onChangeText={setSearchQuery}
+              value={searchQuery}
+              style={[styles.searchBar, { marginRight: 10 }]}
+              icon="magnify"
+              onClearIconPress={() => {
+                setSearchQuery('');
+                setDebouncedSearchQuery('');
+              }}
+            />
+            <Menu
+              visible={searchCategoryMenuVisible}
+              onDismiss={() => setSearchCategoryMenuVisible(false)}
+              anchor={
+                <Button
+                  mode="outlined"
+                  onPress={() => setSearchCategoryMenuVisible(true)}
+                  style={styles.categoryButton}
+                  icon="filter"
+                >
+                  {searchCategory === 'all' ? 'All' : 
+                   searchCategory === 'name' ? 'Name' :
+                   searchCategory === 'partyName' ? 'Party' :
+                   searchCategory === 'constituency' ? 'Constituency' :
+                   searchCategory === 'sessionName' ? 'Session' :
+                   searchCategory === 'sessionDate' ? 'Date' : 'All'}
+                </Button>
+              }
+            >
+              <Menu.Item
+                onPress={() => {
+                  setSearchCategory('all');
+                  setSearchCategoryMenuVisible(false);
+                }}
+                title="All Categories"
+                leadingIcon="magnify"
+              />
+              <Menu.Item
+                onPress={() => {
+                  setSearchCategory('name');
+                  setSearchCategoryMenuVisible(false);
+                }}
+                title="Name"
+                leadingIcon="account"
+              />
+              <Menu.Item
+                onPress={() => {
+                  setSearchCategory('partyName');
+                  setSearchCategoryMenuVisible(false);
+                }}
+                title="Party Name"
+                leadingIcon="flag"
+              />
+              <Menu.Item
+                onPress={() => {
+                  setSearchCategory('constituency');
+                  setSearchCategoryMenuVisible(false);
+                }}
+                title="Constituency"
+                leadingIcon="map-marker"
+              />
+              <Menu.Item
+                onPress={() => {
+                  setSearchCategory('sessionName');
+                  setSearchCategoryMenuVisible(false);
+                }}
+                title="Session Name"
+                leadingIcon="calendar-text"
+              />
+              <Menu.Item
+                onPress={() => {
+                  setSearchCategory('sessionDate');
+                  setSearchCategoryMenuVisible(false);
+                }}
+                title="Session Date"
+                leadingIcon="calendar"
+              />
+            </Menu>
+          </View>
+        </View>
+
+        {/* Dropdown Filters */}
         <View style={styles.filterRow}>
           <Menu
             visible={sessionNameMenuVisible}
@@ -248,9 +392,11 @@ export default function HomeScreen({ navigation }) {
             ))}
           </Menu>
         </View>
-        {(selectedSessionName || selectedSessionDate) && (
+        
+        {/* Clear Filters Button */}
+        {(selectedSessionName || selectedSessionDate || searchQuery) && (
           <Button mode="outlined" onPress={clearFilters} style={styles.clearButton}>
-            Clear Filters
+            Clear All Filters
           </Button>
         )}
       </View>
@@ -313,6 +459,20 @@ const styles = StyleSheet.create({
     padding: 10,
     backgroundColor: '#fff',
     elevation: 2,
+  },
+  searchContainer: {
+    marginBottom: 10,
+  },
+  searchBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  searchBar: {
+    flex: 1,
+    elevation: 1,
+  },
+  categoryButton: {
+    minWidth: 80,
   },
   filterRow: {
     flexDirection: 'row',
