@@ -181,11 +181,6 @@ export default function HomeScreen({ navigation }) {
             Show Speech
           </Button>
         </View>
-        <TouchableOpacity onPress={() => navigation.navigate('MemberDetails', { member: item })}>
-          <Button mode="outlined" style={styles.viewDetailsButton}>
-            View Details
-          </Button>
-        </TouchableOpacity>
       </Card.Content>
     </Card>
     );

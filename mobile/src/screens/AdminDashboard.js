@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { View, StyleSheet, FlatList, Alert, RefreshControl, Platform } from 'react-native';
+import { View, StyleSheet, FlatList, Alert, RefreshControl, Platform, Image } from 'react-native';
 import {
   Card,
   Title,
@@ -11,6 +11,7 @@ import {
   Portal,
   Appbar,
   Avatar,
+  Menu,
 } from 'react-native-paper';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -23,6 +24,8 @@ export default function AdminDashboard({ navigation, route }) {
   const [refreshing, setRefreshing] = useState(false);
   const [dialogVisible, setDialogVisible] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
+  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
+  const [memberToDelete, setMemberToDelete] = useState(null);
 
   // Check authentication on mount and redirect if not authenticated
   useEffect(() => {
@@ -43,7 +46,6 @@ export default function AdminDashboard({ navigation, route }) {
     speechGiven: '',
     timeTaken: '',
     partyName: '',
-    partyLogo: '',
     partyLogoUri: '',
     image: null,
     imageUri: '',
@@ -51,6 +53,62 @@ export default function AdminDashboard({ navigation, route }) {
   
   // Validation errors
   const [validationErrors, setValidationErrors] = useState({});
+  const [partyMenuVisible, setPartyMenuVisible] = useState(false);
+  
+  // Party options with their logo paths
+  const getPartyLogoSource = (partyName) => {
+    if (!partyName) return null;
+    
+    try {
+      if (partyName === 'BJP') {
+        return require('../../assets/bjp.webp');
+      } else if (partyName === 'AAP') {
+        return require('../../assets/aap.jpg');
+      }
+    } catch (error) {
+      console.error('Error loading party logo:', error);
+    }
+    
+    return null;
+  };
+  
+  const getPartyLogoUri = (partyName) => {
+    if (!partyName) return '';
+    
+    const logoSource = getPartyLogoSource(partyName);
+    if (logoSource) {
+      if (Platform.OS === 'web') {
+        // For web, try to resolve the asset source
+        try {
+          const resolved = Image.resolveAssetSource(logoSource);
+          return resolved?.uri || '';
+        } catch (error) {
+          // Fallback to public folder path
+          return `/assets/${partyName === 'BJP' ? 'bjp.webp' : 'aap.jpg'}`;
+        }
+      } else {
+        // For mobile, use require with proper asset resolution
+        return Image.resolveAssetSource(logoSource).uri;
+      }
+    }
+    return '';
+  };
+  
+  const partyOptions = [
+    { name: 'BJP' },
+    { name: 'AAP' },
+  ];
+  
+  // Handle party selection
+  const handlePartySelect = (partyName) => {
+    const logoUri = getPartyLogoUri(partyName);
+    setFormData({
+      ...formData,
+      partyName,
+      partyLogoUri: logoUri,
+    });
+    setPartyMenuVisible(false);
+  };
 
   useEffect(() => {
     loadMembers();
@@ -80,7 +138,6 @@ export default function AdminDashboard({ navigation, route }) {
       speechGiven: '',
       timeTaken: '',
       partyName: '',
-      partyLogo: '',
       partyLogoUri: '',
       image: null,
       imageUri: '',
@@ -111,12 +168,6 @@ export default function AdminDashboard({ navigation, route }) {
             image: result.assets[0],
             imageUri: result.assets[0].uri,
           });
-        } else if (type === 'logo') {
-          setFormData({
-            ...formData,
-            partyLogo: result.assets[0].uri,
-            partyLogoUri: result.assets[0].uri,
-          });
         }
       }
     } catch (error) {
@@ -135,10 +186,9 @@ export default function AdminDashboard({ navigation, route }) {
         speechGiven: member.speechGiven,
         timeTaken: member.timeTaken.toString(),
         partyName: member.partyName || '',
-        partyLogo: member.partyLogoUrl || '',
         partyLogoUri: member.partyLogoUrl 
           ? (member.partyLogoUrl.startsWith('http') ? member.partyLogoUrl : `http://127.0.0.1:5000${member.partyLogoUrl}`)
-          : '',
+          : (member.partyName ? getPartyLogoUri(member.partyName) : ''),
         image: null,
         imageUri: member.imageUrl 
           ? (member.imageUrl.startsWith('http') ? member.imageUrl : `http://127.0.0.1:5000${member.imageUrl}`)
@@ -267,32 +317,40 @@ export default function AdminDashboard({ navigation, route }) {
         }
       }
       
-      // Handle party logo upload
-      if (formData.partyLogoUri) {
-        if (Platform.OS === 'web') {
-          // For web, if it's a local blob URL, fetch and convert to File
-          try {
-            if (formData.partyLogoUri.startsWith('blob:') || formData.partyLogoUri.startsWith('http://localhost') || formData.partyLogoUri.startsWith('file://')) {
-              const response = await fetch(formData.partyLogoUri);
+      // Handle party logo - upload asset file to backend
+      if (formData.partyName) {
+        try {
+          if (Platform.OS === 'web') {
+            // For web, fetch from assets folder
+            const logoPath = `/assets/${formData.partyName === 'BJP' ? 'bjp.webp' : 'aap.jpg'}`;
+            const response = await fetch(logoPath);
+            if (response.ok) {
               const blob = await response.blob();
-              const file = new File([blob], 'party-logo.png', { type: blob.type || 'image/png' });
+              const file = new File([blob], `${formData.partyName.toLowerCase()}.${formData.partyName === 'BJP' ? 'webp' : 'jpg'}`, { 
+                type: blob.type || (formData.partyName === 'BJP' ? 'image/webp' : 'image/jpeg') 
+              });
               submitData.append('partyLogo', file);
             } else {
-              // If it's already a File object or external URL
-              submitData.append('partyLogo', formData.partyLogoUri);
+              console.warn('Could not fetch logo from:', logoPath);
             }
-          } catch (error) {
-            console.error('Error processing logo for web:', error);
-            // Fallback: try to append as-is
-            submitData.append('partyLogo', formData.partyLogoUri);
+          } else {
+            // For mobile, upload from assets
+            const logoAsset = formData.partyName === 'BJP' 
+              ? require('../../assets/bjp.webp')
+              : require('../../assets/aap.jpg');
+            
+            const logoPath = Image.resolveAssetSource(logoAsset).uri;
+            const filename = formData.partyName === 'BJP' ? 'bjp.webp' : 'aap.jpg';
+            
+            submitData.append('partyLogo', {
+              uri: logoPath,
+              type: formData.partyName === 'BJP' ? 'image/webp' : 'image/jpeg',
+              name: filename,
+            });
           }
-        } else {
-          // For mobile, use the standard React Native FormData format
-          submitData.append('partyLogo', {
-            uri: formData.partyLogoUri,
-            type: 'image/png',
-            name: 'party-logo.png',
-          });
+        } catch (error) {
+          console.error('Error processing party logo:', error);
+          // Continue without logo if there's an error
         }
       }
 
@@ -310,31 +368,57 @@ export default function AdminDashboard({ navigation, route }) {
     }
   };
 
-  const handleDelete = async (member) => {
-    Alert.alert(
-      'Confirm Delete',
-      `Are you sure you want to delete ${member.name}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const response = await api.delete(`/members/${member._id}`);
-              Alert.alert('Success', 'Member deleted successfully');
-              await loadMembers();
-            } catch (error) {
-              console.error('Delete error:', error);
-              Alert.alert(
-                'Error', 
-                error.response?.data?.message || error.message || 'Failed to delete member. Please try again.'
-              );
-            }
-          },
-        },
-      ]
-    );
+  const handleDelete = (member) => {
+    console.log('handleDelete called with member:', member);
+    
+    if (!member) {
+      console.error('No member provided');
+      Alert.alert('Error', 'Invalid member data');
+      return;
+    }
+    
+    if (!member._id) {
+      console.error('Member missing _id:', member);
+      Alert.alert('Error', 'Member ID is missing');
+      return;
+    }
+    
+    console.log('Setting member to delete:', member.name, 'ID:', member._id);
+    setMemberToDelete(member);
+    setDeleteDialogVisible(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!memberToDelete || !memberToDelete._id) {
+      Alert.alert('Error', 'Invalid member data');
+      setDeleteDialogVisible(false);
+      setMemberToDelete(null);
+      return;
+    }
+
+    console.log('Delete confirmed. Attempting to delete member:', memberToDelete._id);
+    try {
+      const response = await api.delete(`/members/${memberToDelete._id}`);
+      console.log('Delete response:', response.data);
+      Alert.alert('Success', 'Member deleted successfully');
+      setDeleteDialogVisible(false);
+      setMemberToDelete(null);
+      await loadMembers();
+    } catch (error) {
+      console.error('Delete error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        memberId: memberToDelete._id,
+        url: `/members/${memberToDelete._id}`
+      });
+      Alert.alert(
+        'Error', 
+        error.response?.data?.message || error.message || `Failed to delete member: ${memberToDelete.name}`
+      );
+      setDeleteDialogVisible(false);
+      setMemberToDelete(null);
+    }
   };
 
   const handleLogout = async () => {
@@ -371,7 +455,10 @@ export default function AdminDashboard({ navigation, route }) {
           </Button>
           <Button
             mode="outlined"
-            onPress={() => handleDelete(item)}
+            onPress={() => {
+              console.log('Delete button clicked for:', item);
+              handleDelete(item);
+            }}
             style={styles.deleteButton}
           >
             Delete
@@ -505,19 +592,58 @@ export default function AdminDashboard({ navigation, route }) {
               error={!!validationErrors.timeTaken}
               helperText={validationErrors.timeTaken || 'Only numbers are allowed'}
             />
-            <TextInput
-              label="Party Name"
-              value={formData.partyName}
-              onChangeText={(text) => {
-                const filtered = text.replace(/[^A-Za-z\s\-']/g, '');
-                setFormData({ ...formData, partyName: filtered });
-                validateInput('partyName', filtered);
-              }}
-              mode="outlined"
-              style={styles.input}
-              error={!!validationErrors.partyName}
-              helperText={validationErrors.partyName}
-            />
+            <View style={styles.input}>
+              <Menu
+                visible={partyMenuVisible}
+                onDismiss={() => setPartyMenuVisible(false)}
+                anchor={
+                  <Button
+                    mode="outlined"
+                    onPress={() => setPartyMenuVisible(true)}
+                    style={styles.partyButton}
+                    icon="chevron-down"
+                    contentStyle={styles.partyButtonContent}
+                  >
+                    {formData.partyName || 'Select Party'}
+                  </Button>
+                }
+              >
+                <Menu.Item
+                  onPress={() => {
+                    handlePartySelect('');
+                    setPartyMenuVisible(false);
+                  }}
+                  title="No Party"
+                  leadingIcon="close"
+                />
+                {partyOptions.map((party) => (
+                  <Menu.Item
+                    key={party.name}
+                    onPress={() => handlePartySelect(party.name)}
+                    title={party.name}
+                    leadingIcon="flag"
+                  />
+                ))}
+              </Menu>
+              {formData.partyName && (
+                <View style={styles.partyLogoPreview}>
+                  {(() => {
+                    const logoSource = getPartyLogoSource(formData.partyName);
+                    if (logoSource) {
+                      if (Platform.OS === 'web') {
+                        // For web, use Image component with require
+                        return <Image source={logoSource} style={styles.partyLogoImage} resizeMode="contain" />;
+                      } else {
+                        // For mobile, use Avatar.Image
+                        return <Avatar.Image size={50} source={logoSource} />;
+                      }
+                    }
+                    return null;
+                  })()}
+                  <Paragraph style={styles.partyLogoText}>{formData.partyName} Logo</Paragraph>
+                </View>
+              )}
+            </View>
             <View style={styles.imageSection}>
               <Title style={styles.sectionTitle}>Member Photo</Title>
               {formData.imageUri ? (
@@ -533,26 +659,45 @@ export default function AdminDashboard({ navigation, route }) {
                 </Button>
               )}
             </View>
-            <View style={styles.imageSection}>
-              <Title style={styles.sectionTitle}>Party Logo</Title>
-              {formData.partyLogoUri || formData.partyLogo ? (
-                <View style={styles.imagePreview}>
-                  <Avatar.Image size={60} source={{ uri: formData.partyLogoUri || formData.partyLogo }} />
-                  <Button onPress={() => pickImage('logo')} mode="outlined" style={styles.imageButton}>
-                    Change Logo
-                  </Button>
-                </View>
-              ) : (
-                <Button onPress={() => pickImage('logo')} mode="outlined" icon="image" style={styles.imageButton}>
-                  Upload Party Logo
-                </Button>
-              )}
-            </View>
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={closeDialog}>Cancel</Button>
             <Button onPress={handleSave} mode="contained">
               {editingMember ? 'Update' : 'Add'}
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+        
+        {/* Delete Confirmation Dialog */}
+        <Dialog 
+          visible={deleteDialogVisible} 
+          onDismiss={() => {
+            setDeleteDialogVisible(false);
+            setMemberToDelete(null);
+          }}
+        >
+          <Dialog.Title>Confirm Delete</Dialog.Title>
+          <Dialog.Content>
+            <Paragraph>
+              Are you sure you want to delete {memberToDelete?.name}?
+            </Paragraph>
+            <Paragraph style={{ marginTop: 10, fontSize: 12, color: '#666' }}>
+              This action cannot be undone.
+            </Paragraph>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => {
+              setDeleteDialogVisible(false);
+              setMemberToDelete(null);
+            }}>
+              Cancel
+            </Button>
+            <Button 
+              onPress={confirmDelete}
+              mode="contained"
+              buttonColor="#d32f2f"
+            >
+              Delete
             </Button>
           </Dialog.Actions>
         </Dialog>
@@ -616,6 +761,30 @@ const styles = StyleSheet.create({
   },
   imageButton: {
     marginTop: 10,
+  },
+  partyButton: {
+    marginBottom: 10,
+  },
+  partyButtonContent: {
+    justifyContent: 'flex-start',
+  },
+  partyLogoPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+  },
+  partyLogoText: {
+    marginLeft: 10,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  partyLogoImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
   },
 });
 
