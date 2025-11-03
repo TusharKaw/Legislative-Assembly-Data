@@ -13,15 +13,27 @@ import {
   Avatar,
 } from 'react-native-paper';
 import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthContext } from '../../App';
 import api from '../config/api';
 
-export default function AdminDashboard({ navigation }) {
-  const { logout } = useContext(AuthContext);
+export default function AdminDashboard({ navigation, route }) {
+  const { logout, isAuthenticated } = useContext(AuthContext);
   const [members, setMembers] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [dialogVisible, setDialogVisible] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
+
+  // Check authentication on mount and redirect if not authenticated
+  useEffect(() => {
+    const checkAuth = async () => {
+      const token = await AsyncStorage.getItem('adminToken');
+      if (!token || !isAuthenticated) {
+        navigation.replace('Login');
+      }
+    };
+    checkAuth();
+  }, [isAuthenticated, navigation]);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -32,6 +44,7 @@ export default function AdminDashboard({ navigation }) {
     timeTaken: '',
     partyName: '',
     partyLogo: '',
+    partyLogoUri: '',
     image: null,
     imageUri: '',
   });
@@ -65,6 +78,7 @@ export default function AdminDashboard({ navigation }) {
       timeTaken: '',
       partyName: '',
       partyLogo: '',
+      partyLogoUri: '',
       image: null,
       imageUri: '',
     });
@@ -97,6 +111,7 @@ export default function AdminDashboard({ navigation }) {
           setFormData({
             ...formData,
             partyLogo: result.assets[0].uri,
+            partyLogoUri: result.assets[0].uri,
           });
         }
       }
@@ -117,8 +132,13 @@ export default function AdminDashboard({ navigation }) {
         timeTaken: member.timeTaken.toString(),
         partyName: member.partyName || '',
         partyLogo: member.partyLogoUrl || '',
+        partyLogoUri: member.partyLogoUrl 
+          ? (member.partyLogoUrl.startsWith('http') ? member.partyLogoUrl : `http://127.0.0.1:5000${member.partyLogoUrl}`)
+          : '',
         image: null,
-        imageUri: member.imageUrl || '',
+        imageUri: member.imageUrl 
+          ? (member.imageUrl.startsWith('http') ? member.imageUrl : `http://127.0.0.1:5000${member.imageUrl}`)
+          : '',
       });
     } else {
       resetForm();
@@ -148,20 +168,62 @@ export default function AdminDashboard({ navigation }) {
       submitData.append('timeTaken', formData.timeTaken);
       submitData.append('partyName', formData.partyName || '');
       
-      if (formData.image && formData.imageUri) {
-        submitData.append('image', {
-          uri: formData.imageUri,
-          type: 'image/jpeg',
-          name: 'member-image.jpg',
-        });
+      // Handle image upload - works for both mobile and web
+      if (formData.imageUri) {
+        if (Platform.OS === 'web') {
+          // For web, if it's a local blob URL, fetch and convert to File
+          try {
+            if (formData.imageUri.startsWith('blob:') || formData.imageUri.startsWith('http://localhost') || formData.imageUri.startsWith('file://')) {
+              const response = await fetch(formData.imageUri);
+              const blob = await response.blob();
+              const file = new File([blob], 'member-image.jpg', { type: blob.type || 'image/jpeg' });
+              submitData.append('image', file);
+            } else {
+              // If it's already a File object or external URL
+              submitData.append('image', formData.imageUri);
+            }
+          } catch (error) {
+            console.error('Error processing image for web:', error);
+            // Fallback: try to append as-is
+            submitData.append('image', formData.imageUri);
+          }
+        } else {
+          // For mobile, use the standard React Native FormData format
+          submitData.append('image', {
+            uri: formData.imageUri,
+            type: 'image/jpeg',
+            name: 'member-image.jpg',
+          });
+        }
       }
       
-      if (formData.partyLogo) {
-        submitData.append('partyLogo', {
-          uri: formData.partyLogo,
-          type: 'image/png',
-          name: 'party-logo.png',
-        });
+      // Handle party logo upload
+      if (formData.partyLogoUri) {
+        if (Platform.OS === 'web') {
+          // For web, if it's a local blob URL, fetch and convert to File
+          try {
+            if (formData.partyLogoUri.startsWith('blob:') || formData.partyLogoUri.startsWith('http://localhost') || formData.partyLogoUri.startsWith('file://')) {
+              const response = await fetch(formData.partyLogoUri);
+              const blob = await response.blob();
+              const file = new File([blob], 'party-logo.png', { type: blob.type || 'image/png' });
+              submitData.append('partyLogo', file);
+            } else {
+              // If it's already a File object or external URL
+              submitData.append('partyLogo', formData.partyLogoUri);
+            }
+          } catch (error) {
+            console.error('Error processing logo for web:', error);
+            // Fallback: try to append as-is
+            submitData.append('partyLogo', formData.partyLogoUri);
+          }
+        } else {
+          // For mobile, use the standard React Native FormData format
+          submitData.append('partyLogo', {
+            uri: formData.partyLogoUri,
+            type: 'image/png',
+            name: 'party-logo.png',
+          });
+        }
       }
 
       if (editingMember) {
@@ -211,7 +273,7 @@ export default function AdminDashboard({ navigation }) {
           text: 'Logout',
           onPress: async () => {
             await logout();
-            navigation.navigate('Home');
+            navigation.replace('Home');
           },
         },
       ]
@@ -358,9 +420,9 @@ export default function AdminDashboard({ navigation }) {
             </View>
             <View style={styles.imageSection}>
               <Title style={styles.sectionTitle}>Party Logo</Title>
-              {formData.partyLogo ? (
+              {formData.partyLogoUri || formData.partyLogo ? (
                 <View style={styles.imagePreview}>
-                  <Avatar.Image size={60} source={{ uri: formData.partyLogo }} />
+                  <Avatar.Image size={60} source={{ uri: formData.partyLogoUri || formData.partyLogo }} />
                   <Button onPress={() => pickImage('logo')} mode="outlined" style={styles.imageButton}>
                     Change Logo
                   </Button>

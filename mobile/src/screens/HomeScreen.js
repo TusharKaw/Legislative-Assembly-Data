@@ -5,7 +5,7 @@ import { AuthContext } from '../../App';
 import api from '../config/api';
 
 export default function HomeScreen({ navigation }) {
-  const { isAuthenticated } = useContext(AuthContext);
+  const { isAuthenticated, logout } = useContext(AuthContext);
   const [members, setMembers] = useState([]);
   const [filteredMembers, setFilteredMembers] = useState([]);
   const [sessionNames, setSessionNames] = useState([]);
@@ -76,12 +76,16 @@ export default function HomeScreen({ navigation }) {
   };
 
   const renderMemberCard = ({ item }) => {
+    // Construct proper image URLs - check if already full URL or needs backend prefix
     const imageUrl = item.imageUrl 
       ? (item.imageUrl.startsWith('http') ? item.imageUrl : `http://127.0.0.1:5000${item.imageUrl}`)
       : null;
     const logoUrl = item.partyLogoUrl 
       ? (item.partyLogoUrl.startsWith('http') ? item.partyLogoUrl : `http://127.0.0.1:5000${item.partyLogoUrl}`)
       : null;
+    
+    // Debug log to see what data we're getting
+    // console.log('Member data:', { name: item.name, imageUrl: item.imageUrl, partyLogoUrl: item.partyLogoUrl, partyName: item.partyName });
     
     return (
     <Card style={styles.card}>
@@ -143,14 +147,25 @@ export default function HomeScreen({ navigation }) {
           }
         >
           {isAuthenticated ? (
-            <Menu.Item
-              onPress={() => {
-                setHamburgerMenuVisible(false);
-                navigation.navigate('AdminDashboard');
-              }}
-              title="Admin Dashboard"
-              leadingIcon="shield-account"
-            />
+            <>
+              <Menu.Item
+                onPress={() => {
+                  setHamburgerMenuVisible(false);
+                  navigation.navigate('AdminDashboard');
+                }}
+                title="Admin Dashboard"
+                leadingIcon="shield-account"
+              />
+              <Menu.Item
+                onPress={async () => {
+                  setHamburgerMenuVisible(false);
+                  await logout();
+                  navigation.replace('Home');
+                }}
+                title="Logout"
+                leadingIcon="logout"
+              />
+            </>
           ) : (
             <Menu.Item
               onPress={() => {
