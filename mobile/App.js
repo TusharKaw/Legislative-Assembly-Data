@@ -53,7 +53,7 @@ export default function App() {
         <NavigationContainer>
           <Stack.Navigator>
             <Stack.Screen 
-              name="Home" 
+              name="Delhi Vidhan Sabha" 
               component={HomeScreen}
               options={{ headerShown: false }}
             />

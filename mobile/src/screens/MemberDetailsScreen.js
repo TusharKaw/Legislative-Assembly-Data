@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView, Image } from 'react-native';
+import { View, StyleSheet, ScrollView, Image, Platform } from 'react-native';
 import { Card, Title, Paragraph, Chip, Avatar } from 'react-native-paper';
 
 export default function MemberDetailsScreen({ route }) {
@@ -8,9 +8,32 @@ export default function MemberDetailsScreen({ route }) {
   const imageUrl = member.imageUrl 
     ? (member.imageUrl.startsWith('http') ? member.imageUrl : `http://127.0.0.1:5000${member.imageUrl}`)
     : null;
-  const logoUrl = member.partyLogoUrl 
-    ? (member.partyLogoUrl.startsWith('http') ? member.partyLogoUrl : `http://127.0.0.1:5000${member.partyLogoUrl}`)
-    : null;
+  
+  // Get logo URL from backend OR fallback to asset
+  const getPartyLogoSource = (partyName) => {
+    if (!partyName) return null;
+    try {
+      if (partyName === 'BJP') {
+        return require('../../assets/bjp.webp');
+      } else if (partyName === 'AAP') {
+        return require('../../assets/aap.jpg');
+      }
+    } catch (error) {
+      console.error('Error loading party logo:', error);
+    }
+    return null;
+  };
+  
+  let logoUrl = null;
+  let logoSource = null;
+  
+  if (member.partyLogoUrl) {
+    logoUrl = member.partyLogoUrl.startsWith('http') 
+      ? member.partyLogoUrl 
+      : `http://127.0.0.1:5000${member.partyLogoUrl}`;
+  } else if (member.partyName) {
+    logoSource = getPartyLogoSource(member.partyName);
+  }
 
   return (
     <ScrollView style={styles.container}>
@@ -21,9 +44,15 @@ export default function MemberDetailsScreen({ route }) {
           )}
           <View style={styles.headerRow}>
             <Title style={styles.title}>{member.name}</Title>
-            {logoUrl && (
+            {logoUrl ? (
               <Avatar.Image size={50} source={{ uri: logoUrl }} />
-            )}
+            ) : logoSource ? (
+              Platform.OS === 'web' ? (
+                <Image source={logoSource} style={styles.partyLogoImage} resizeMode="contain" />
+              ) : (
+                <Avatar.Image size={50} source={logoSource} />
+              )
+            ) : null}
           </View>
           
           {member.partyName && (
@@ -114,6 +143,11 @@ const styles = StyleSheet.create({
   speechCard: {
     marginTop: 10,
     backgroundColor: '#fafafa',
+  },
+  partyLogoImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
   },
 });
 

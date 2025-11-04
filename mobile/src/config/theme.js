@@ -6,8 +6,14 @@ export const theme = {
     ...DefaultTheme.colors,
     primary: '#1976d2',
     accent: '#03dac4',
-    background: '#f5f5f5',
+    background: '#f0f2f5',
+    surface: '#ffffff',
+    text: '#1a1a1a',
+    placeholder: '#757575',
+    disabled: '#bdbdbd',
+    backdrop: 'rgba(0, 0, 0, 0.5)',
   },
+  roundness: 12,
 };
 
 // For web, use localhost. For mobile, use IP address
